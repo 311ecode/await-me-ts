@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    /* This allows the .ts extensions in imports */
+    "allowImportingTsExtensions": true,
+    /* This is required when allowImportingTsExtensions is true */
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*", "test/**/*", "example.ts"]
+}

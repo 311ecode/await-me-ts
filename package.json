@@ -1,0 +1,32 @@
+{
+  "name": "await-me-ts",
+  "version": "1.0.1",
+  "description": "The high-performance core engine for declarative async error handling in TypeScript.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/311ecode/await-me-ts.git"
+  },
+  "homepage": "https://github.com/311ecode/await-me-ts#readme",
+  "keywords": [
+    "typescript",
+    "async",
+    "promises",
+    "go-style",
+    "error-handling",
+    "zero-try-catch",
+    "type-stripping",
+    "node22"
+  ],
+  "author": "311ecode",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "start": "node --experimental-strip-types example.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.9.3"
+  }
+}
