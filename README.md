@@ -1,180 +1,125 @@
 # ⚡ await-me-ts
 
-**High-performance declarative async error handling for TypeScript**  
-Stop writing nested `try/catch` everywhere. Write clean, linear "happy path" code with strong type safety.
+**High-performance declarative async error handling — TypeScript-first**
 
-Current status: **experimental / early-stage** (Dec 2025)  
-Target: Node.js 22+ with `--experimental-strip-types`
+Write clean, linear "happy path" code without nested `try/catch` blocks.
+
+**Current status:** experimental / early v1 (December 2025)  
+**Target audience:** TypeScript users on modern Node.js (22+ with `--experimental-strip-types`)  
+**Bundle size:** ~1.2–1.8 kB (minified)
+
+### Looking for the browser / older Node / production-ready bundle?
+
+→ Go to [**await-me** — the pre-bundled, ES2015+ JavaScript distribution](https://www.npmjs.com/package/await-me)
 
 ## Core Idea in 30 seconds
 
 ```ts
-// Classic nightmare style
-let user: User | undefined;
+// Before (classic pain)
+let user;
 try {
-  user = await db.users.findById(id);
-} catch (err) {
-  if (err.code === 404) return notFound();
-  logger.error("Database exploded", err);
+  user = await db.users.find(id);
+} catch (e) {
+  if (e.code === 404) return notFound();
+  logger.error(e);
   return serverError();
 }
 
-// await-me-ts style (FALSE_STYLE)
+// After (await-me-ts)
 const user = await valueOf(
-  db.users.findById(id),
+  db.users.find(id),
   { error: "User fetch failed" }
 );
 
-if (!user) return notFound();         // ← 404 is already handled & logged internally
-console.log(user.name);               // ← happy path, no try/catch
+if (!user) return notFound();
+console.log(user.name); // ← no try/catch, happy path
 ```
 
-## The "Big Three" — Most people only need these
+## The "Big Three" — 90% of use-cases
 
-| Function       | Returns on success      | Returns on failure     | Best when you want to...                                | Safe when data can be `false`/`0`/`null`? |
-|----------------|--------------------------|------------------------|----------------------------------------------------------|--------------------------------------------|
-| `valueOf<T>`   | `T`                      | `false`                | Quick data fetch, `false` means failure is obvious      | **NO**                                     |
-| `isSuccess`    | `true`                   | `false`                | Fire-and-forget, status checks, mutations               | Yes                                        |
-| `toResult<T>`  | `{ success:true, data:T }` | `{ success:false, error, data:null }` | Need to distinguish `false`/`null` as **valid** data | **YES**                                    |
+| Function       | Success return          | Failure return         | Best for                                      | Safe with falsy values? |
+|----------------|--------------------------|------------------------|-----------------------------------------------|--------------------------|
+| `valueOf<T>`   | `T`                      | `false`                | Most data fetching                            | **No**                   |
+| `isSuccess`    | `true`                   | `false`                | Mutations, status checks, fire-and-forget     | **Yes**                  |
+| `toResult<T>`  | `{ success: true, data: T }` | `{ success: false, error }` | When `false`/`null`/ `0` are valid results | **Yes**                  |
 
-### Quick comparison examples
+### Real-world quick examples
 
 ```ts
-// 1. Getting data — most common case
-const profile = await valueOf(getUserProfile(id), "Profile unavailable");
+// 1. Classic data fetch
+const profile = await valueOf(getProfile(id), "Profile unavailable");
 if (!profile) return;
 
-// 2. Just want to know if operation succeeded
-if (await isSuccess(deleteUser(id), { success: "User deleted!" })) {
-  refreshList();
+// 2. Mutation / side-effect
+if (await isSuccess(deletePost(id), { success: "Post deleted" })) {
+  refreshFeed();
 }
 
-// 3. Data can be legitimately false / null / 0
-const subscription = await toResult(checkActiveSubscription(userId));
-if (!subscription.success) {
-  // network/db error
-  return;
-}
-if (!subscription.data) {
-  showUpgradeScreen();
-}
+// 3. Safe with boolean / null / 0 values
+const isActive = await toResult(checkSubscription(userId));
+if (!isActive.success) return;
+if (!isActive.data) showUpgradeWall();
 ```
 
-## All supported Return Styles
-
-You can customize behavior using `createAsyncHandler({ returnStyle: ... })`
-
-| Style           | Success       | Failure         | Typical use-case                              | Readable pattern       |
-|-----------------|---------------|-----------------|-----------------------------------------------|------------------------|
-| `FALSE_STYLE`   | `T`           | `false`         | Most common — quick shield + happy path       | `if (!value) return`   |
-| `GO_STYLE`      | `[null, T]`   | `[Error, null]` | People who like explicit Go/Rust style        | `if (err) return`      |
-| `BOOLEAN`       | `true`        | `false`         | Status checks only                            | `if (await op()) {}`   |
-| `ONLY_ERROR`    | `0`           | `1`             | Unix/shell style exit codes                   | (rare in TS)           |
-| `ERROR_STYLE`   | `T`           | `Error`         | You want to throw anyway but with middleware  | (advanced)             |
-
-## Advanced control: Conditional error handling (waterfall style)
+## All Return Styles (customizable)
 
 ```ts
-const safeApiCall = createAsyncHandler({
+import { createAsyncHandler, RETURN_STYLES } from 'await-me-ts';
+
+const custom = createAsyncHandler({
+  returnStyle: RETURN_STYLES.FALSE_STYLE, // ← most popular
+  // ... other options
+});
+```
+
+| Style           | Success            | Failure            | Typical feeling                     |
+|-----------------|--------------------|--------------------|-------------------------------------|
+| `FALSE_STYLE`   | value              | `false`            | "if (!x) return" — very common      |
+| `GO_STYLE`      | `[null, value]`    | `[err, null]`      | Go/Rust explicit style              |
+| `BOOLEAN`       | `true`             | `false`            | Pure status                         |
+| `ONLY_ERROR`    | `0`                | `1`                | Unix exit codes                     |
+| `ERROR_STYLE`   | value              | `Error`            | Middleware + eventual throw         |
+
+## Powerful conditional error handling (waterfall)
+
+```ts
+const safeApi = createAsyncHandler({
   returnStyle: RETURN_STYLES.FALSE_STYLE,
-
-  // First match wins — order matters!
   conditionalHandlerChain: [
-    // 404 → silent (expected)
-    {
-      ifTrue: e => e.code === 404 || e.status === 404,
-      doIt:  () => {} // nothing, very quiet
-    },
-
-    // Auth → redirect (client side usually)
-    {
-      ifTrue: e => e.code === 401 || e.status === 401,
-      doIt:  () => redirectToLogin()
-    },
-
-    // Rate limit → special message
-    {
-      ifTrue: e => e.code === 429,
-      doIt:  () => showToast("Rate limit exceeded. Try again in a minute.")
-    }
+    { ifTrue: e => e?.code === 404, doIt: () => {} },                    // silent expected
+    { ifTrue: e => e?.code === 401, doIt: () => redirectToLogin() },
+    { ifTrue: e => e?.code === 429, doIt: () => showRateLimitToast() }
   ],
-
-  // Everything else → serious error
   defaultHandler: err => {
-    reportToSentry(err);
-    console.error("Critical API failure:", err);
+    sentry.captureException(err);
+    console.error("Critical:", err);
   }
 });
 
-const data = await safeApiCall(fetch("/api/protected/data"));
-if (!data) return; // ← handled according to rules above
+const data = await safeApi(fetch("/api/sensitive"));
+if (!data) return; // ← already handled smartly
 ```
 
-## Logging & side-effects (very useful in practice)
-
-All three main helpers accept second argument of type:
+## Smart logging & side-effects
 
 ```ts
-type LogConfig =
-  | string                                 // simple message
-  | {
-      success?: string | { fn: Function, params?: any[] };
-      error?:   string | { fn: Function, params?: any[] };
-    };
-```
-
-Examples that appear in real apps very often:
-
-```ts
-// Simple string messages
-await valueOf(saveDraft(), "Failed to save draft");
-
-// Different messages + side effects
-await isSuccess(
-  sendAnalyticsEvent(event),
+await valueOf(
+  saveDraft(content),
   {
-    success: "Event tracked",
-    error:   { fn: showErrorToast, params: ["Analytics unavailable"] }
-  }
-);
-
-// Complex real-world example
-const user = await valueOf(
-  fetchUserWithCache(id),
-  {
-    success: { fn: updateUserCache, params: [id] },
-    error:   [
-      "User fetch failed",
-      { fn: captureMessage, params: ["user_fetch_failed", { id }] }
-    ]
+    success: { fn: () => toast.success("Saved!") },
+    error:   "Failed to save draft"
   }
 );
 ```
 
-## Installation & usage (2025 / Node 22+)
+## Installation & modern Node usage
 
 ```bash
 npm install await-me-ts
 ```
 
-```ts
-// Recommended tsconfig (for --experimental-strip-types)
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "stripInternal": true,
-    "noEmit": true,           // only type checking
-    "allowJs": true
-  }
-}
-```
-
-Run examples:
-
 ```bash
-node --experimental-strip-types example.ts
+node --experimental-strip-types src/index.ts
 ```
 
 ## Philosophy & Trade-offs
@@ -206,4 +151,3 @@ classic try/catch + libs | —                         | No             | Manual
 
 
 Happy shielding! 🛡️
-
