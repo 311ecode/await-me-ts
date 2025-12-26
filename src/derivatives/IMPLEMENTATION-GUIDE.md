@@ -22,6 +22,8 @@ The biggest risk in modern JavaScript is a "naked" `await`—a promise call with
 
 **Audit your code: everywhere you see `const x = await ...`, consider replacing it with a derivative.**
 
+
+
 ### 1. The `valueOf` Pattern (Data-First)
 Best for fetching objects or strings where a `false` return clearly indicates a failure.
 
@@ -94,7 +96,8 @@ const ok = await isSuccess(saveRecord(data), {
 
 ## 🎯 Summary
 
-**If you see an `await`, wrap it.** - Use **`valueOf`** for quick data retrieval.
+**If you see an `await`, wrap it.**
 
+* Use **`valueOf`** for quick data retrieval.
 * Use **`toResult`** if the data itself could be `false` or `null`.
-* Use **`isSuccess`** when you only care about the status code.
+* Use **`isSuccess`** when you only care about the operation succeeding.
