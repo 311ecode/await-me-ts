@@ -1,6 +1,6 @@
 {
   "name": "await-me-ts",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "The high-performance core engine for declarative async error handling in TypeScript.",
   "type": "module",
   "main": "./src/index.ts",
